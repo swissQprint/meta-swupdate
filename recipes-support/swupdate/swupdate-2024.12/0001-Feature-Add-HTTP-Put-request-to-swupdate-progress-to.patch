@@ -1,48 +1,41 @@
-From 73790a6e9e4761f93529311c7a97ebca9e5a028d Mon Sep 17 00:00:00 2001
-From: Andreas Kalberer <aka@swissqprint.com>
-Date: Tue, 14 Mar 2023 07:35:14 +0100
-Subject: [PATCH] Feature: Add HTTP Put request to swupdate-progress to update
- progress via HTTP.
-
----
- tools/swupdate-progress.c | 66 ++++++++++++++++++++++++++++++++++++++-
- 1 file changed, 65 insertions(+), 1 deletion(-)
-
 diff --git a/tools/swupdate-progress.c b/tools/swupdate-progress.c
-index e3f010b..9763a76 100644
+index bd5a7913..0dd1779f 100644
 --- a/tools/swupdate-progress.c
 +++ b/tools/swupdate-progress.c
-@@ -23,6 +23,8 @@
+@@ -24,7 +24,7 @@
+ #include <netinet/in.h>
  #include <pthread.h>
  #include <getopt.h>
- 
+-
 +#include <curl/curl.h>
-+
  #include <progress_ipc.h>
  
  #define PSPLASH_MSG_SIZE	64
-@@ -206,13 +208,19 @@ int main(int argc, char **argv)
+@@ -238,6 +238,7 @@ int main(int argc, char **argv)
  	int opt_w = 0;
  	int opt_r = 0;
  	int opt_p = 0;
 +	int opt_u = 0;
  	int c;
- 	int ret;
  	char *script = NULL;
- 	bool wait_update = true;
+ 	char *reboot_script = NULL;
+@@ -245,8 +246,14 @@ int main(int argc, char **argv)
+ 	bool disable_reboot = false;
+ 	bool redirected = false;
  
 +	CURL *curl;
 +	CURLcode res;
 +	char put_buffer[1024];
 +	struct curl_slist *put_headers = NULL;
 +
++
  	/* Process options with getopt */
--	while ((c = getopt_long(argc, argv, "cwprhs:e:",
-+	while ((c = getopt_long(argc, argv, "cwprhus:e:",
+-	while ((c = getopt_long(argc, argv, "cwprhs:e:q",
++	while ((c = getopt_long(argc, argv, "cwprhus:e:q",
  				long_options, NULL)) != EOF) {
  		switch (c) {
  		case 'c':
-@@ -240,6 +248,9 @@ int main(int argc, char **argv)
+@@ -279,6 +286,9 @@ int main(int argc, char **argv)
  		case 'q':
  			silent = true;
  			break;
@@ -52,10 +45,10 @@ index e3f010b..9763a76 100644
  		default:
  			usage(argv[0]);
  			exit(1);
-@@ -252,6 +263,38 @@ int main(int argc, char **argv)
- 		rundir = "/run";
- 	snprintf(psplash_pipe_path, sizeof(psplash_pipe_path), "%s/psplash_fifo", rundir);
- 
+@@ -295,6 +305,37 @@ int main(int argc, char **argv)
+ 			rundir = "/run";
+ 		snprintf(psplash_pipe_path, sizeof(psplash_pipe_path), "%s/psplash_fifo", rundir);
+ 	}
 +	if(opt_u) {
 +		// init for HTTP PUT progress updates
 +		curl_global_init(CURL_GLOBAL_ALL);
@@ -87,13 +80,12 @@ index e3f010b..9763a76 100644
 +						curl_easy_strerror(res));
 +		}
 +	}
-+
  	connfd = -1;
- 	while (1) {
- 		if (connfd < 0) {
-@@ -340,6 +383,21 @@ int main(int argc, char **argv)
- 					curstep = msg.cur_step;
- 					percent = msg.cur_percent;
+ 	redirected = !isatty(fileno(stdout));
+ 
+@@ -410,6 +451,21 @@ int main(int argc, char **argv)
+ 				if (psplash_ok && ((msg.cur_step != curstep) || (msg.cur_percent != percent))) {
+ 					psplash_progress(psplash_pipe_path, &msg);
  				}
 +				if (opt_u) {
 +					int len = snprintf(put_buffer, 1024,
@@ -113,7 +105,7 @@ index e3f010b..9763a76 100644
  				curstep = msg.cur_step;
  				percent = msg.cur_percent;
  			}
-@@ -391,4 +449,10 @@ int main(int argc, char **argv)
+@@ -483,4 +539,10 @@ int main(int argc, char **argv)
  			break;
  		}
  	}
@@ -124,6 +116,3 @@ index e3f010b..9763a76 100644
 +		curl_global_cleanup();
 +	}
  }
--- 
-2.34.1
-
